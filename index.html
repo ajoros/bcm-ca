@@ -13,53 +13,85 @@
     --line: rgba(243, 239, 228, 0.16);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
   body {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+    overflow: hidden;
     font-family: "Avenir Next", "Segoe UI", sans-serif;
-    min-height: 100%;
   }
   header {
-    position: sticky;
-    top: 0;
-    z-index: 2;
     display: flex;
-    align-items: center;
-    gap: 28px;
-    padding: 18px 28px;
-    background: var(--bg);
+    align-items: baseline;
+    gap: 16px;
+    padding: 10px 16px 8px;
     border-bottom: 1px solid var(--line);
   }
   h1 {
     margin: 0;
     font-family: Palatino, "Iowan Old Style", Georgia, serif;
     font-weight: 500;
-    font-size: 22px;
+    font-size: 20px;
   }
-  .sub { color: var(--muted); font-size: 13px; margin-top: 3px; }
-  #board { padding: 18px 28px 48px; display: grid; gap: 28px; }
-  .day {
+  .sub { color: var(--muted); font-size: 13px; }
+  .phone-only { display: none; }
+  #board {
+    min-height: 0;
     display: grid;
-    grid-template-columns: 150px 1fr;
-    gap: 16px;
-    align-items: start;
+    grid-template-columns: 4.6rem repeat(var(--days), minmax(0, 1fr));
+    grid-template-rows: auto repeat(3, minmax(0, 1fr));
+    gap: 6px 8px;
+    padding: 8px 12px 10px;
+    scrollbar-width: none;
   }
-  .when { margin: 8px 0 0; font-size: 15px; font-weight: 600; }
-  .hours { color: var(--muted); font-size: 13px; margin-top: 4px; }
-  .plots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  #board::-webkit-scrollbar { display: none; }
+  .ylabels { display: contents; }
+  .ylabels span, .when {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  .when {
+    flex-direction: column;
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .when small { font-weight: 500; color: var(--muted); font-size: 11px; }
+  .day { display: contents; }
   .plot {
     appearance: none;
     border: 1px solid var(--line);
     background: #1a2118;
     color: inherit;
-    border-radius: 14px;
-    padding: 10px 10px 12px;
-    text-align: left;
+    border-radius: 12px;
+    padding: 4px 4px 5px;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     cursor: pointer;
     font: inherit;
   }
-  .plot img { width: 100%; height: auto; display: block; border-radius: 8px; }
-  .plot b { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
-  .plot span { color: var(--muted); font-size: 12px; }
+  .plot img {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    object-fit: contain;
+  }
+  .plot b { display: none; }
+  .plot .mean {
+    flex: 0 0 auto;
+    text-align: center;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.3;
+  }
   #detail {
     position: fixed;
     inset: 0;
@@ -69,7 +101,10 @@
     background: var(--bg);
   }
   body.open #detail { display: grid; }
-  #detail header { position: static; }
+  #detail header {
+    align-items: center;
+    gap: 12px;
+  }
   #detail .stage {
     min-height: 0;
     display: flex;
@@ -77,16 +112,16 @@
     justify-content: center;
   }
   #detail img {
-    height: calc(100vh - 168px);
+    height: calc(100dvh - 132px);
     width: auto;
-    max-width: 88%;
+    max-width: min(92vw, 1100px);
     object-fit: contain;
   }
   #detail footer {
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 18px 28px;
+    padding: 12px 16px;
     border-top: 1px solid var(--line);
   }
   .legend { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 12px; color: var(--muted); }
@@ -114,19 +149,50 @@
     color: var(--muted);
   }
   body.ready #loading { display: none; }
-  @media (max-width: 800px) {
-    .day { grid-template-columns: 1fr; }
-    .plots { grid-template-columns: 1fr; }
-    header, #board, #detail footer { padding-left: 16px; padding-right: 16px; }
+  @media (max-width: 760px) {
+    .wide-only { display: none; }
+    .phone-only { display: inline; }
+    header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      padding: 10px 14px;
+    }
+    #board {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      gap: 0;
+      padding: 0;
+    }
+    .ylabels { display: none; }
+    .day {
+      display: flex;
+      flex-direction: column;
+      flex: 0 0 100%;
+      scroll-snap-align: start;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      gap: 8px;
+      padding: 8px 12px 12px;
+    }
+    .when { justify-content: flex-start; font-size: 15px; }
+    .plot { flex: 1 1 0; }
+    .plot b {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 4px 0;
+    }
   }
 </style>
 </head>
 <body>
 <header>
-  <div>
-    <h1>California water balance</h1>
-    <div class="sub">Click a map to open it. Arrow keys move between the open maps.</div>
-  </div>
+  <h1>California water balance</h1>
+  <div class="sub wide-only">Click a map to enlarge it.</div>
+  <div class="sub phone-only">Swipe for the next day. Tap a map to enlarge it.</div>
 </header>
 <main id="board"></main>
 <div id="detail">
@@ -159,8 +225,18 @@ function label(day) {
   });
 }
 
+function columnLabel(day) {
+  const when = new Date(day.date + "T12:00:00");
+  const weekday = when.toLocaleDateString("en-US", { weekday: "short" });
+  return weekday + " " + when.getDate();
+}
+
 function hours(day) {
   return day.hours === 24 ? "full day" : day.hours + " of 24 hours";
+}
+
+function shortHours(day) {
+  return day.hours === 24 ? "full day" : day.hours + " h";
 }
 
 function showDetail() {
@@ -174,8 +250,7 @@ function showDetail() {
   const scale = manifest.scales[key];
   document.getElementById("lo").textContent = scale[0] + " mm";
   document.getElementById("hi").textContent = scale[1] + " mm";
-  const swatch = document.getElementById("swatch");
-  swatch.className = "swatch " + key;
+  document.getElementById("swatch").className = "swatch " + key;
   const img = document.getElementById("big");
   img.src = day.images[key];
   img.alt = day.date + " " + names[key];
@@ -208,39 +283,52 @@ fetch("manifest.json").then((response) => response.json()).then(async (data) => 
   manifest = data;
   days = data.days;
   const board = document.getElementById("board");
+  board.style.setProperty("--days", String(days.length));
+  const labels = document.createElement("div");
+  labels.className = "ylabels";
+  ["", ...order.map((key) => names[key])].forEach((text, row) => {
+    const span = document.createElement("span");
+    span.textContent = text;
+    span.style.gridColumn = "1";
+    span.style.gridRow = String(row + 1);
+    labels.appendChild(span);
+  });
+  board.appendChild(labels);
   const images = [];
   days.forEach((day, dayIndex) => {
-    const row = document.createElement("section");
-    row.className = "day";
-    const heading = document.createElement("div");
-    heading.innerHTML = "<div class='when'>" + label(day) + "</div><div class='hours'>" + hours(day) + "</div>";
-    const plots = document.createElement("div");
-    plots.className = "plots";
-    order.forEach((key) => {
+    const column = String(dayIndex + 2);
+    const section = document.createElement("section");
+    section.className = "day";
+    const when = document.createElement("div");
+    when.className = "when";
+    when.style.gridColumn = column;
+    when.style.gridRow = "1";
+    when.innerHTML = columnLabel(day) + "<small>" + shortHours(day) + "</small>";
+    section.appendChild(when);
+    order.forEach((key, row) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "plot";
+      button.style.gridColumn = column;
+      button.style.gridRow = String(row + 2);
       const img = document.createElement("img");
       img.alt = label(day) + " " + names[key];
       img.src = day.images[key];
       img.decoding = "async";
-      button.appendChild(img);
       const title = document.createElement("b");
       title.textContent = names[key];
-      const mean = document.createElement("span");
+      const mean = document.createElement("div");
+      mean.className = "mean";
       mean.textContent = day.mean[key].toFixed(2) + " mm";
-      button.appendChild(title);
-      button.appendChild(mean);
+      button.append(title, img, mean);
       button.addEventListener("click", () => {
         openAt = { day: dayIndex, key };
         showDetail();
       });
-      plots.appendChild(button);
+      section.appendChild(button);
       images.push(img);
     });
-    row.appendChild(heading);
-    row.appendChild(plots);
-    board.appendChild(row);
+    board.appendChild(section);
   });
   await Promise.all(images.map((img) => img.decode().catch(() => {})));
   document.body.classList.add("ready");
