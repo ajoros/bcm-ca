@@ -56,9 +56,9 @@
   .hours { color: var(--muted); font-size: 13px; }
   .legend { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; color: var(--muted); }
   .swatch { width: 160px; height: 8px; border-radius: 99px; }
-  .swatch.run { background: linear-gradient(90deg, #deebf7, #6baed6, #08306b); }
-  .swatch.rch { background: linear-gradient(90deg, #e5f5e0, #74c476, #006d2c); }
-  .swatch.pck { background: linear-gradient(90deg, #efedf5, #9e9ac8, #3f007d); }
+  .swatch.run { background: linear-gradient(90deg, #6baed6, #2171b5, #08306b); }
+  .swatch.rch { background: linear-gradient(90deg, #74c476, #238b45, #005a32); }
+  .swatch.pck { background: linear-gradient(90deg, #9e9ac8, #6a51a3, #3f007d); }
   #loading {
     position: fixed;
     inset: 0;
@@ -183,7 +183,7 @@ function paint() {
     }
     document.body.classList.add("ready");
   };
-  frame.src = day.images[key];
+  frame.src = day.images[key] + "?v=topo";
   if (frame.complete && frame.naturalWidth) frame.onload();
   document.getElementById("hours").textContent = day.hours === 24 ? "full day" : day.hours + " of 24 hours";
   document.getElementById("mean").textContent = "Area mean " + format(day.mean[key]);
@@ -237,16 +237,16 @@ fetch("manifest.json").then((response) => response.json()).then((data) => {
   });
   map = L.map("map", { minZoom: 5, maxZoom: 14 });
   map.createPane("labels");
-  map.getPane("labels").style.zIndex = 450;
+  map.getPane("labels").style.zIndex = 650;
   map.getPane("labels").style.pointerEvents = "none";
-  const gray = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_";
-  L.tileLayer(gray + "Base/MapServer/tile/{z}/{y}/{x}", {
-    attribution: "Esri, HERE, Garmin, &copy; OpenStreetMap contributors",
-    maxZoom: 16
+  const esri = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+  L.tileLayer(esri + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Esri, USGS, NOAA, &copy; OpenStreetMap contributors",
+    maxZoom: 19
   }).addTo(map);
-  L.tileLayer(gray + "Reference/MapServer/tile/{z}/{y}/{x}", {
+  L.tileLayer(esri + "Reference/World_Reference_Overlay/MapServer/tile/{z}/{y}/{x}", {
     pane: "labels",
-    maxZoom: 16
+    maxZoom: 19
   }).addTo(map);
   map.fitBounds(manifest.bounds, { padding: [12, 12] });
   paint();
