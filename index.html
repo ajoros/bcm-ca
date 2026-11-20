@@ -279,9 +279,18 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowLeft") move(-1);
 });
 
+function pacificToday() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+}
+
 fetch("manifest.json").then((response) => response.json()).then(async (data) => {
   manifest = data;
-  days = data.days;
+  const today = pacificToday();
+  days = data.days.filter((day) => day.date >= today);
+  if (!days.length) {
+    document.getElementById("loading").textContent = "The latest forecast has no days left.";
+    return;
+  }
   const board = document.getElementById("board");
   board.style.setProperty("--days", String(days.length));
   const labels = document.createElement("div");
