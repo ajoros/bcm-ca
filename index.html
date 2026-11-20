@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>California water balance</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   :root {
     color-scheme: dark;
@@ -16,130 +17,48 @@
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
   body {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
     height: 100dvh;
     overflow: hidden;
     font-family: "Avenir Next", "Segoe UI", sans-serif;
   }
-  header {
+  header, footer {
     display: flex;
-    align-items: baseline;
-    gap: 16px;
-    padding: 10px 16px 8px;
-    border-bottom: 1px solid var(--line);
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg);
   }
+  header { border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  footer { border-top: 1px solid var(--line); }
   h1 {
     margin: 0;
     font-family: Palatino, "Iowan Old Style", Georgia, serif;
     font-weight: 500;
     font-size: 20px;
   }
-  .sub { color: var(--muted); font-size: 13px; }
-  .phone-only { display: none; }
-  #board {
-    min-height: 0;
-    display: grid;
-    grid-template-columns: 4.6rem repeat(var(--days), minmax(0, 1fr));
-    grid-template-rows: auto repeat(3, minmax(0, 1fr));
-    gap: 6px 8px;
-    padding: 8px 12px 10px;
-    scrollbar-width: none;
-  }
-  #board::-webkit-scrollbar { display: none; }
-  .ylabels { display: contents; }
-  .ylabels span, .when {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.2;
-  }
-  .when {
-    flex-direction: column;
-    color: var(--ink);
-    font-weight: 600;
-    font-size: 13px;
-  }
-  .when small { font-weight: 500; color: var(--muted); font-size: 11px; }
-  .day { display: contents; }
-  .plot {
-    appearance: none;
-    border: 1px solid var(--line);
-    background: #1a2118;
-    color: inherit;
-    border-radius: 12px;
-    padding: 4px 4px 5px;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    cursor: pointer;
-    font: inherit;
-  }
-  .plot img {
-    flex: 1 1 auto;
-    min-height: 0;
-    width: 100%;
-    object-fit: contain;
-  }
-  .plot b { display: none; }
-  .plot .mean {
-    flex: 0 0 auto;
-    text-align: center;
-    color: var(--muted);
-    font-size: 11px;
-    line-height: 1.3;
-  }
-  #detail {
-    position: fixed;
-    inset: 0;
-    z-index: 5;
-    display: none;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    background: var(--bg);
-  }
-  body.open #detail { display: grid; }
-  #detail header {
-    align-items: center;
-    gap: 12px;
-  }
-  #detail .stage {
-    min-height: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  #detail img {
-    height: calc(100dvh - 132px);
-    width: auto;
-    max-width: min(92vw, 1100px);
-    object-fit: contain;
-  }
-  #detail footer {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 12px 16px;
-    border-top: 1px solid var(--line);
-  }
-  .legend { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 12px; color: var(--muted); }
-  .swatch { width: 180px; height: 8px; border-radius: 99px; }
-  .swatch.run { background: linear-gradient(90deg, #d6cebe, #96becc, #2e78a8, #0c2a4e); }
-  .swatch.rch { background: linear-gradient(90deg, #d6cebe, #a8c4aa, #2e8c78, #0e403a); }
-  .swatch.pck { background: linear-gradient(90deg, #303a44, #7892a4, #d6e0e6, #f8fafc); }
-  button.back, button.step {
+  .group { display: flex; gap: 6px; flex-wrap: wrap; }
+  button.choice, button.unit {
     appearance: none;
     border: 1px solid var(--line);
     background: transparent;
     color: var(--ink);
     border-radius: 999px;
-    padding: 8px 14px;
+    padding: 6px 12px;
     font: inherit;
     font-size: 14px;
     cursor: pointer;
   }
+  button.choice.on, button.unit.on { background: #f3efe4; color: #12160f; }
+  #map { min-height: 0; background: #e6e2d8; }
+  .leaflet-container { font-family: inherit; }
+  #mean { font-size: 14px; }
+  .hours { color: var(--muted); font-size: 13px; }
+  .legend { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; color: var(--muted); }
+  .swatch { width: 160px; height: 8px; border-radius: 99px; }
+  .swatch.run { background: linear-gradient(90deg, #d6cebe, #96becc, #2e78a8, #0c2a4e); }
+  .swatch.rch { background: linear-gradient(90deg, #a8c4aa, #2e8c78, #0e403a); }
+  .swatch.pck { background: linear-gradient(90deg, #303a44, #7892a4, #f8fafc); }
   #loading {
     position: fixed;
     inset: 0;
@@ -147,82 +66,39 @@
     place-items: center;
     background: var(--bg);
     color: var(--muted);
+    z-index: 20;
   }
   body.ready #loading { display: none; }
-  @media (max-width: 760px) {
-    .wide-only { display: none; }
-    .phone-only { display: inline; }
-    header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 2px;
-      padding: 10px 14px;
-    }
-    #board {
-      display: flex;
-      overflow-x: auto;
-      scroll-snap-type: x mandatory;
-      gap: 0;
-      padding: 0;
-    }
-    .ylabels { display: none; }
-    .day {
-      display: flex;
-      flex-direction: column;
-      flex: 0 0 100%;
-      scroll-snap-align: start;
-      min-width: 0;
-      min-height: 0;
-      height: 100%;
-      gap: 8px;
-      padding: 8px 12px 12px;
-    }
-    .when { justify-content: flex-start; font-size: 15px; }
-    .plot { flex: 1 1 0; }
-    .plot b {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 2px 4px 0;
-    }
-  }
 </style>
 </head>
 <body>
 <header>
   <h1>California water balance</h1>
-  <div class="sub wide-only">Click a map to enlarge it.</div>
-  <div class="sub phone-only">Swipe for the next day. Tap a map to enlarge it.</div>
+  <div class="group" id="vars"></div>
+  <button type="button" class="unit on" id="unit">mm</button>
 </header>
-<main id="board"></main>
-<div id="detail">
-  <header>
-    <button type="button" class="back" id="close">All maps</button>
-    <div>
-      <h1 id="title">—</h1>
-      <div class="sub" id="meta"></div>
-    </div>
-    <button type="button" class="step" id="prev">Previous</button>
-    <button type="button" class="step" id="next">Next</button>
-  </header>
-  <div class="stage"><img id="big" alt=""></div>
-  <footer>
-    <div id="mean"></div>
-    <div class="legend"><span id="lo"></span><div class="swatch" id="swatch"></div><span id="hi"></span></div>
-  </footer>
-</div>
-<div id="loading">Preparing the days…</div>
+<div id="map"></div>
+<footer>
+  <div class="group" id="days"></div>
+  <div class="hours" id="hours"></div>
+  <div id="mean"></div>
+  <div class="legend"><span id="lo"></span><div class="swatch" id="swatch"></div><span id="hi"></span></div>
+</footer>
+<div id="loading">Preparing the map…</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const names = { run: "Runoff", rch: "Recharge", pck: "Snowpack" };
 const order = ["run", "rch", "pck"];
 let manifest = null;
 let days = [];
-let openAt = null;
+let key = "run";
+let dayIndex = 0;
+let imperial = false;
+let overlay = null;
+let map = null;
 
-function label(day) {
-  return new Date(day.date + "T12:00:00").toLocaleDateString("en-US", {
-    weekday: "short", month: "short", day: "numeric"
-  });
+function pacificToday() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 }
 
 function columnLabel(day) {
@@ -231,59 +107,39 @@ function columnLabel(day) {
   return weekday + " " + when.getDate();
 }
 
-function hours(day) {
-  return day.hours === 24 ? "full day" : day.hours + " of 24 hours";
+function format(mm) {
+  if (!imperial) return mm.toFixed(2) + " mm";
+  const inches = mm / 25.4;
+  return (Math.abs(inches) < 0.1 ? inches.toFixed(3) : inches.toFixed(2)) + " in";
 }
 
-function shortHours(day) {
-  return day.hours === 24 ? "full day" : day.hours + " h";
-}
-
-function showDetail() {
-  const spot = openAt;
-  const day = days[spot.day];
-  const key = spot.key;
-  document.body.classList.add("open");
-  document.getElementById("title").textContent = names[key];
-  document.getElementById("meta").textContent = label(day) + " · " + hours(day);
-  document.getElementById("mean").textContent = "Area mean " + day.mean[key].toFixed(2) + " mm";
+function paint() {
+  const day = days[dayIndex];
+  if (overlay) map.removeLayer(overlay);
+  overlay = L.imageOverlay(day.images[key], manifest.bounds, { opacity: 0.88 }).addTo(map);
+  document.getElementById("hours").textContent = day.hours === 24 ? "full day" : day.hours + " of 24 hours";
+  document.getElementById("mean").textContent = "Area mean " + format(day.mean[key]);
   const scale = manifest.scales[key];
-  document.getElementById("lo").textContent = scale[0] + " mm";
-  document.getElementById("hi").textContent = scale[1] + " mm";
+  document.getElementById("lo").textContent = format(scale[0]);
+  document.getElementById("hi").textContent = format(scale[1]);
   document.getElementById("swatch").className = "swatch " + key;
-  const img = document.getElementById("big");
-  img.src = day.images[key];
-  img.alt = day.date + " " + names[key];
+  document.querySelectorAll("#vars button").forEach((button) => {
+    button.classList.toggle("on", button.dataset.key === key);
+  });
+  document.querySelectorAll("#days button").forEach((button) => {
+    button.classList.toggle("on", Number(button.dataset.index) === dayIndex);
+  });
 }
 
-function move(step) {
-  if (!openAt) return;
-  const flat = [];
-  days.forEach((day, dayIndex) => order.forEach((key) => flat.push({ day: dayIndex, key })));
-  let index = flat.findIndex((item) => item.day === openAt.day && item.key === openAt.key);
-  index = Math.min(flat.length - 1, Math.max(0, index + step));
-  openAt = flat[index];
-  showDetail();
-}
-
-document.getElementById("close").addEventListener("click", () => {
-  document.body.classList.remove("open");
-  openAt = null;
-});
-document.getElementById("prev").addEventListener("click", () => move(-1));
-document.getElementById("next").addEventListener("click", () => move(1));
-document.addEventListener("keydown", (event) => {
-  if (!openAt) return;
-  if (event.key === "Escape") document.getElementById("close").click();
-  if (event.key === "ArrowRight") move(1);
-  if (event.key === "ArrowLeft") move(-1);
+document.getElementById("unit").addEventListener("click", () => {
+  imperial = !imperial;
+  const button = document.getElementById("unit");
+  button.textContent = imperial ? "inches" : "mm";
+  button.classList.toggle("on", !imperial);
+  paint();
 });
 
-function pacificToday() {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-}
-
-fetch("manifest.json").then((response) => response.json()).then(async (data) => {
+fetch("manifest.json").then((response) => response.json()).then((data) => {
   manifest = data;
   const today = pacificToday();
   days = data.days.filter((day) => day.date >= today);
@@ -291,55 +147,41 @@ fetch("manifest.json").then((response) => response.json()).then(async (data) => 
     document.getElementById("loading").textContent = "The latest forecast has no days left.";
     return;
   }
-  const board = document.getElementById("board");
-  board.style.setProperty("--days", String(days.length));
-  const labels = document.createElement("div");
-  labels.className = "ylabels";
-  ["", ...order.map((key) => names[key])].forEach((text, row) => {
-    const span = document.createElement("span");
-    span.textContent = text;
-    span.style.gridColumn = "1";
-    span.style.gridRow = String(row + 1);
-    labels.appendChild(span);
+  const vars = document.getElementById("vars");
+  order.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choice";
+    button.dataset.key = item;
+    button.textContent = names[item];
+    button.addEventListener("click", () => { key = item; paint(); });
+    vars.appendChild(button);
   });
-  board.appendChild(labels);
-  const images = [];
-  days.forEach((day, dayIndex) => {
-    const column = String(dayIndex + 2);
-    const section = document.createElement("section");
-    section.className = "day";
-    const when = document.createElement("div");
-    when.className = "when";
-    when.style.gridColumn = column;
-    when.style.gridRow = "1";
-    when.innerHTML = columnLabel(day) + "<small>" + shortHours(day) + "</small>";
-    section.appendChild(when);
-    order.forEach((key, row) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "plot";
-      button.style.gridColumn = column;
-      button.style.gridRow = String(row + 2);
-      const img = document.createElement("img");
-      img.alt = label(day) + " " + names[key];
-      img.src = day.images[key];
-      img.decoding = "async";
-      const title = document.createElement("b");
-      title.textContent = names[key];
-      const mean = document.createElement("div");
-      mean.className = "mean";
-      mean.textContent = day.mean[key].toFixed(2) + " mm";
-      button.append(title, img, mean);
-      button.addEventListener("click", () => {
-        openAt = { day: dayIndex, key };
-        showDetail();
-      });
-      section.appendChild(button);
-      images.push(img);
-    });
-    board.appendChild(section);
+  const dayBar = document.getElementById("days");
+  days.forEach((day, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choice";
+    button.dataset.index = String(index);
+    button.textContent = columnLabel(day);
+    button.addEventListener("click", () => { dayIndex = index; paint(); });
+    dayBar.appendChild(button);
   });
-  await Promise.all(images.map((img) => img.decode().catch(() => {})));
+  map = L.map("map", { minZoom: 5, maxZoom: 13 });
+  map.createPane("labels");
+  map.getPane("labels").style.zIndex = 450;
+  map.getPane("labels").style.pointerEvents = "none";
+  const gray = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_";
+  L.tileLayer(gray + "Base/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Esri, HERE, Garmin, &copy; OpenStreetMap contributors",
+    maxZoom: 16
+  }).addTo(map);
+  L.tileLayer(gray + "Reference/MapServer/tile/{z}/{y}/{x}", {
+    pane: "labels",
+    maxZoom: 16
+  }).addTo(map);
+  map.fitBounds(manifest.bounds, { padding: [12, 12] });
+  paint();
   document.body.classList.add("ready");
 });
 </script>
