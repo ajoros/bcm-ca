@@ -50,6 +50,16 @@
     cursor: pointer;
   }
   button.choice.on, button.unit.on { background: #f3efe4; color: #12160f; }
+  a.choice {
+    text-decoration: none;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+  #note { flex-basis: 100%; color: var(--muted); font-size: 13px; margin: 0; padding: 0; }
+  #note:empty { display: none; }
   #map { min-height: 0; background: #e6e2d8; }
   .leaflet-container { font-family: inherit; }
   #mean { font-size: 14px; }
@@ -74,8 +84,10 @@
 <body>
 <header>
   <h1>California water balance</h1>
+  <a class="choice" id="study" href="case.html">Dec 26–31, 2022 case study</a>
   <div class="group" id="vars"></div>
   <button type="button" class="unit on" id="unit">mm</button>
+  <div id="note"></div>
 </header>
 <div id="map"></div>
 <footer>
@@ -87,6 +99,7 @@
 <div id="loading">Preparing the map…</div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+const study = location.pathname.endsWith("case.html");
 const names = { run: "Runoff", rch: "Recharge", pck: "Snowpack" };
 const order = ["run", "rch", "pck"];
 let manifest = null;
@@ -207,10 +220,18 @@ document.getElementById("unit").addEventListener("click", () => {
   paint();
 });
 
-fetch("manifest.json").then((response) => response.json()).then((data) => {
+fetch(study ? "case.json" : "manifest.json").then((response) => response.json()).then((data) => {
   manifest = data;
+  if (study) {
+    document.querySelector("h1").textContent = data.title || "2022–23 snow season";
+    document.getElementById("note").textContent = data.note || "Case study of a past season. Not a forecast.";
+    document.title = document.querySelector("h1").textContent;
+    const link = document.getElementById("study");
+    link.textContent = "Current forecast";
+    link.href = "index.html";
+  }
   const today = pacificToday();
-  days = data.days.filter((day) => day.date >= today);
+  days = study ? data.days : data.days.filter((day) => day.date >= today);
   if (!days.length) {
     document.getElementById("loading").textContent = "The latest forecast has no days left.";
     return;

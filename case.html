@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>California water balance</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #12160f;
+    --ink: #f3efe4;
+    --muted: #b7b1a2;
+    --line: rgba(243, 239, 228, 0.16);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+  body {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100dvh;
+    overflow: hidden;
+    font-family: "Avenir Next", "Segoe UI", sans-serif;
+  }
+  header, footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg);
+  }
+  header { border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  footer { border-top: 1px solid var(--line); }
+  h1 {
+    margin: 0;
+    font-family: Palatino, "Iowan Old Style", Georgia, serif;
+    font-weight: 500;
+    font-size: 20px;
+  }
+  .group { display: flex; gap: 6px; flex-wrap: wrap; }
+  button.choice, button.unit {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button.choice.on, button.unit.on { background: #f3efe4; color: #12160f; }
+  a.choice {
+    text-decoration: none;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+  #note { flex-basis: 100%; color: var(--muted); font-size: 13px; margin: 0; padding: 0; }
+  #note:empty { display: none; }
+  #map { min-height: 0; background: #e6e2d8; }
+  .leaflet-container { font-family: inherit; }
+  #mean { font-size: 14px; }
+  .hours { color: var(--muted); font-size: 13px; }
+  .legend { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; color: var(--muted); }
+  .swatch { width: 160px; height: 8px; border-radius: 99px; }
+  .swatch.run { background: linear-gradient(90deg, #6baed6, #2171b5, #08306b); }
+  .swatch.rch { background: linear-gradient(90deg, #74c476, #238b45, #005a32); }
+  .swatch.pck { background: linear-gradient(90deg, #9e9ac8, #6a51a3, #3f007d); }
+  #loading {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+    color: var(--muted);
+    z-index: 20;
+  }
+  body.ready #loading { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>California water balance</h1>
+  <a class="choice" id="study" href="case.html">Dec 26–31, 2022 case study</a>
+  <div class="group" id="vars"></div>
+  <button type="button" class="unit on" id="unit">mm</button>
+  <div id="note"></div>
+</header>
+<div id="map"></div>
+<footer>
+  <div class="group" id="days"></div>
+  <div class="hours" id="hours"></div>
+  <div id="mean"></div>
+  <div class="legend"><span id="lo"></span><div class="swatch" id="swatch"></div><span id="hi"></span></div>
+</footer>
+<div id="loading">Preparing the map…</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const study = location.pathname.endsWith("case.html");
+const names = { run: "Runoff", rch: "Recharge", pck: "Snowpack" };
+const order = ["run", "rch", "pck"];
+let manifest = null;
+let days = [];
+let key = "run";
+let dayIndex = 0;
+let imperial = false;
+let map = null;
+let cells = null;
+let token = 0;
+const frame = new Image();
+let pixels = null;
+let pixelW = 0;
+let pixelH = 0;
+
+const ORIGIN = 20037508.342789244;
+
+function cacheFrame() {
+  const canvas = document.createElement("canvas");
+  canvas.width = frame.naturalWidth;
+  canvas.height = frame.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(frame, 0, 0);
+  pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  pixelW = canvas.width;
+  pixelH = canvas.height;
+}
+
+const Cells = L.GridLayer.extend({
+  createTile: function (coords) {
+    const size = this.getTileSize().x;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = size;
+    drawTile(tile.getContext("2d"), coords, size);
+    return tile;
+  }
+});
+
+function drawTile(ctx, coords, size) {
+  if (!pixels || !manifest.mercator) return;
+  const res = (2 * ORIGIN) / (size * Math.pow(2, coords.z));
+  const [xmin, ymin, xmax, ymax] = manifest.mercator;
+  const mx0 = coords.x * size * res - ORIGIN;
+  const my0 = ORIGIN - coords.y * size * res;
+  const sx0 = (mx0 - xmin) / (xmax - xmin) * pixelW;
+  const sy0 = (ymax - my0) / (ymax - ymin) * pixelH;
+  const sw = size * res / (xmax - xmin) * pixelW;
+  const sh = size * res / (ymax - ymin) * pixelH;
+  const out = ctx.createImageData(size, size);
+  const dest = out.data;
+  for (let py = 0; py < size; py++) {
+    const sy = Math.min(pixelH - 1, Math.max(0, Math.floor(sy0 + (py + 0.5) * sh / size)));
+    const row = sy * pixelW;
+    for (let px = 0; px < size; px++) {
+      const sx = Math.min(pixelW - 1, Math.max(0, Math.floor(sx0 + (px + 0.5) * sw / size)));
+      const si = (row + sx) * 4;
+      const di = (py * size + px) * 4;
+      dest[di] = pixels[si];
+      dest[di + 1] = pixels[si + 1];
+      dest[di + 2] = pixels[si + 2];
+      dest[di + 3] = pixels[si + 3];
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+}
+
+function pacificToday() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+}
+
+function columnLabel(day) {
+  const when = new Date(day.date + "T12:00:00");
+  const weekday = when.toLocaleDateString("en-US", { weekday: "short" });
+  return weekday + " " + when.getDate();
+}
+
+function format(mm) {
+  if (!imperial) return mm.toFixed(2) + " mm";
+  const inches = mm / 25.4;
+  return (Math.abs(inches) < 0.1 ? inches.toFixed(3) : inches.toFixed(2)) + " in";
+}
+
+function paint() {
+  const day = days[dayIndex];
+  const mine = ++token;
+  frame.onload = () => {
+    if (mine !== token) return;
+    cacheFrame();
+    if (!cells) {
+      cells = new Cells({ tileSize: 256, pane: "overlayPane" });
+      cells.addTo(map);
+    } else {
+      cells.redraw();
+    }
+    document.body.classList.add("ready");
+  };
+  frame.src = day.images[key] + "?v=topo";
+  if (frame.complete && frame.naturalWidth) frame.onload();
+  document.getElementById("hours").textContent = day.hours === 24 ? "full day" : day.hours + " of 24 hours";
+  document.getElementById("mean").textContent = "Area mean " + format(day.mean[key]);
+  const scale = manifest.scales[key];
+  document.getElementById("lo").textContent = format(scale[0]);
+  document.getElementById("hi").textContent = format(scale[1]);
+  document.getElementById("swatch").className = "swatch " + key;
+  document.querySelectorAll("#vars button").forEach((button) => {
+    button.classList.toggle("on", button.dataset.key === key);
+  });
+  document.querySelectorAll("#days button").forEach((button) => {
+    button.classList.toggle("on", Number(button.dataset.index) === dayIndex);
+  });
+}
+
+document.getElementById("unit").addEventListener("click", () => {
+  imperial = !imperial;
+  const button = document.getElementById("unit");
+  button.textContent = imperial ? "inches" : "mm";
+  button.classList.toggle("on", !imperial);
+  paint();
+});
+
+fetch(study ? "case.json" : "manifest.json").then((response) => response.json()).then((data) => {
+  manifest = data;
+  if (study) {
+    document.querySelector("h1").textContent = data.title || "2022–23 snow season";
+    document.getElementById("note").textContent = data.note || "Case study of a past season. Not a forecast.";
+    document.title = document.querySelector("h1").textContent;
+    const link = document.getElementById("study");
+    link.textContent = "Current forecast";
+    link.href = "index.html";
+  }
+  const today = pacificToday();
+  days = study ? data.days : data.days.filter((day) => day.date >= today);
+  if (!days.length) {
+    document.getElementById("loading").textContent = "The latest forecast has no days left.";
+    return;
+  }
+  const vars = document.getElementById("vars");
+  order.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choice";
+    button.dataset.key = item;
+    button.textContent = names[item];
+    button.addEventListener("click", () => { key = item; paint(); });
+    vars.appendChild(button);
+  });
+  const dayBar = document.getElementById("days");
+  days.forEach((day, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choice";
+    button.dataset.index = String(index);
+    button.textContent = columnLabel(day);
+    button.addEventListener("click", () => { dayIndex = index; paint(); });
+    dayBar.appendChild(button);
+  });
+  map = L.map("map", { minZoom: 5, maxZoom: 14 });
+  map.createPane("labels");
+  map.getPane("labels").style.zIndex = 650;
+  map.getPane("labels").style.pointerEvents = "none";
+  const esri = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+  L.tileLayer(esri + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Esri, USGS, NOAA, &copy; OpenStreetMap contributors",
+    maxZoom: 19
+  }).addTo(map);
+  L.tileLayer(esri + "Reference/World_Reference_Overlay/MapServer/tile/{z}/{y}/{x}", {
+    pane: "labels",
+    maxZoom: 19
+  }).addTo(map);
+  map.fitBounds(manifest.bounds, { padding: [12, 12] });
+  paint();
+});
+</script>
+</body>
+</html>
